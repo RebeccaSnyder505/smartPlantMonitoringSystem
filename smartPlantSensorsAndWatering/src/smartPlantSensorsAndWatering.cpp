@@ -7,11 +7,15 @@
  *  NOTE 2023-11-07 possible wiring problem with dust sensor 5v
  *  NOTE OLED needs something more, displaying stuff but oddly
  * 
+ *
+ * 
  *  must install library "Adafruit_SSD1306" with ctrl-shift-p
  *  install library "IoTClassroom_CNM" with ctrl-shift-p
  *  install "Arduino"
  *  install "Grove_Air_quality_Sensor"
  *  install "Adafruit_MQTT"
+ *  install "Adafruit_SSD1306"
+ *  install "Adafruit_BME280"
  * 
  */
 
@@ -20,6 +24,7 @@
 #include "Grove_Air_quality_Sensor.h"
 #include "Adafruit_SSD1306.h"
 #include "Adafruit_GFX.h"
+#include "Adafruit_BME280.h"
 #include <math.h>
 
 
@@ -42,6 +47,11 @@ Adafruit_MQTT_SPARK mqtt(&TheClient,AIO_SERVER,AIO_SERVERPORT,AIO_USERNAME,AIO_K
 Adafruit_MQTT_Publish AQProcessedFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/seeedsensors.air-quality-from-class-airqualitysensor");
 Adafruit_MQTT_Publish AQRawFeed= Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/seeedsensors.raw-air-quality-data");
 Adafruit_MQTT_Publish dustFeed = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/seeedsensors.dust-sensor");
+Adafruit_MQTT_Publish feedAirPressure = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartflowerpot.airpress");
+Adafruit_MQTT_Publish feedTempCelcius = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartflowerpot.tempcelcius");
+Adafruit_MQTT_Publish feedHumidity = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartflowerpot.humidity");
+Adafruit_MQTT_Publish feedPlantMoisture = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartflowerpot.plantmoisture");
+Adafruit_MQTT_Publish feedWaterButton = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/smartflowerpot.waterbutton");
 
 /************Declare Variables*************/
 unsigned int last, lastTime;
@@ -57,6 +67,9 @@ bool MQTT_ping();
 Adafruit_SSD1306 display(OLED_RESET); 
 void testdrawcircle(void);
 
+// Define BME280 objext
+Adafruit_BME280 bme; // initialize I2C temp sensor
+
 const int AQPIN = A5;
 const int DUSTPIN = A2;
 int currentAQ =-1;
@@ -66,12 +79,18 @@ int prevAQTime;
 int prevDustTime;
 const int timeIntervalAQ = 2000;
 const int timeIntervalDust = 5000;
-int prevAdafruiutTime;
+int prevAdafruitTime;
 const int timeIntervalAdafruit = 25000; 
 const int MOISTPIN = A1;
 int moistureRead;
 const int timeIntervalMoisture = 5000;
 int prevMoistureTime;
+bool status;
+int prevBME289Time;
+const int timeIntervalBME280 = 5000;
+float tempC; 
+float pressPA;
+float humidRH;
 
 AirQualitySensor airquality(AQPIN); // declaring object airquality of class AirQualitySensor
 
@@ -86,15 +105,22 @@ void setup() {
   Serial.begin(9600);
   waitFor(Serial.isConnected,10000);
 
+  //initialize OLED
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
+  //initialize BME280
+  status = bme.begin(0x76);
+  if (status == false) {
+    Serial.printf("BME280 falied to start");
+  }
+  
   WiFi.on();
   WiFi.connect();
   while (WiFi.connecting()) {
     Serial.printf(".");
   }
   Serial.printf("\n\n"); 
-  prevAdafruiutTime = 0;
+  prevAdafruitTime = 0;
   pinMode(MOISTPIN, INPUT);
 }
 
@@ -133,13 +159,24 @@ void loop() {
     moistureRead = analogRead(MOISTPIN);
     Serial.printf("moisture reading %d \n", moistureRead);  
   }
-  if ((millis()-prevAdafruiutTime) > timeIntervalAdafruit) { //publish to Adafruit
+  if ((millis() - prevBME289Time) > timeIntervalBME280) { //read BME280 temp pres humid
+    prevBME289Time = millis();
+    tempC = bme.readTemperature(); // in degrees Celcius
+    pressPA = bme.readPressure();  // in Pascals
+    humidRH = bme.readHumidity();  // in %RH
+    Serial.printf("Temp %f Press %f Humid %f \n", tempC , pressPA , humidRH );
+  }
+  if ((millis()-prevAdafruitTime) > timeIntervalAdafruit) { //publish to Adafruit
     if(mqtt.Update()) {
-      prevAdafruiutTime = millis();
+      prevAdafruitTime = millis();
       Serial.printf("attempting adafruit publish");
       AQProcessedFeed.publish(currentAQ);
       AQRawFeed.publish(currentAQRaw);
       dustFeed.publish(currentDust);
+      feedAirPressure.publish(pressPA);
+      feedHumidity.publish(humidRH);
+      feedTempCelcius.publish(tempC);
+      feedPlantMoisture.publish(moistureRead);
     }
   }
 }
