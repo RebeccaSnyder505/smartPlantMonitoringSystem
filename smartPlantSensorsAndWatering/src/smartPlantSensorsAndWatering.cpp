@@ -4,6 +4,9 @@
  * Date: 2023-11-07
  * 
  * 
+ *  NOTE 2023-11-07 possible wiring problem with dust sensor 5v
+ *  NOTE OLED needs something more, displaying stuff but oddly
+ * 
  *  must install library "Adafruit_SSD1306" with ctrl-shift-p
  *  install library "IoTClassroom_CNM" with ctrl-shift-p
  *  install "Arduino"
@@ -50,6 +53,7 @@ bool MQTT_ping();
 // end adafruit publishing stuff
 
 //declare object "display" to use with OLED
+#define OLED_RESET D4
 Adafruit_SSD1306 display(OLED_RESET); 
 void testdrawcircle(void);
 
@@ -125,16 +129,17 @@ void loop() {
     Serial.printf("Dustness level: %f \n", currentDust);
   }
   if ((millis() - prevMoistureTime) > timeIntervalMoisture) { //read Moisture Sensor
+    prevMoistureTime = millis();
     moistureRead = analogRead(MOISTPIN);
     Serial.printf("moisture reading %d \n", moistureRead);  
   }
   if ((millis()-prevAdafruiutTime) > timeIntervalAdafruit) { //publish to Adafruit
     if(mqtt.Update()) {
+      prevAdafruiutTime = millis();
       Serial.printf("attempting adafruit publish");
       AQProcessedFeed.publish(currentAQ);
       AQRawFeed.publish(currentAQRaw);
       dustFeed.publish(currentDust);
-      Serial.printf("attempting adafruit publish");
     }
   }
 }
