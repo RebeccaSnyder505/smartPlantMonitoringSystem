@@ -94,6 +94,7 @@ float humidRH;
 const int pumpPin = D9;
 const int moistureLow = 10; // ridiculously low, needs testing to find number
 bool givePlantWater;
+int prevWaterTime;
 
 AirQualitySensor airquality(AQPIN); // declaring object airquality of class AirQualitySensor
 
@@ -105,6 +106,7 @@ SYSTEM_MODE(SEMI_AUTOMATIC);
 
 // setup() runs once, when the device is first turned on
 void setup() {
+  digitalWrite(pumpPin, LOW); // if the pump is on, turn it off
   Serial.begin(9600);
   waitFor(Serial.isConnected,10000);
 
@@ -139,16 +141,16 @@ void loop() {
     currentAQ = airquality.slope();
     if (currentAQ >= 0) { //if a valid datum is returned
       if (currentAQ == 0){
-        Serial.printf("Whew that's bad!!");
+        Serial.printf("AQ very bad");
       }
       if (currentAQ == 1) {
-        Serial.printf("getting worse");
+        Serial.printf("AQ poor");
       }
       if (currentAQ == 2) {
-        Serial.printf("less than fresh");
+        Serial.printf("AQ good");
       }
       if (currentAQ == 3) {
-        Serial.printf("so fresh");
+        Serial.printf("AQ excellent");
       }
       currentAQRaw = airquality.getValue();
       Serial.printf("AQ sensor: %f \n", currentAQRaw);
@@ -183,7 +185,7 @@ void loop() {
     if (subscription == &feedWaterButton) {
       Serial.printf("line 184, give plant water = true \n");
       subValue = atof((char *)feedWaterButton.lastread);
-      Serial.printf("button pushed on adafrui");
+      Serial.printf("button pushed on adafruit %d \n", subValue);
 
       givePlantWater = true;
     }
@@ -220,14 +222,14 @@ void loop() {
       feedPlantMoisture.publish(moistureRead);
     }
   }
-  if (givePlantWater == true) {
+  if ((givePlantWater == true) and (millis() - prevWaterTime >= 5000)) {
+    prevWaterTime = millis();
     givePlantWater = false;
     digitalWrite(pumpPin, HIGH);
     Serial.printf("relay closed \n");
     delay (1000); // relay closed for very short time
     digitalWrite(pumpPin, LOW);
     Serial.printf("relay open \n");
-    delay(3000); // removoe after testing
   }
 }
 
